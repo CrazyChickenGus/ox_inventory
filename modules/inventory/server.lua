@@ -165,7 +165,52 @@ function Inventory.SetSlot(inv, item, count, metadata, slot)
 end
 
 local Items
-CreateThread(function() Items = server.items end)
+
+CreateThread(function()
+	Items = server.items
+
+	-- Require "set inventory:weaponmismatch 1" to enable experimental weapon checks.
+	-- Maybe need some tweaks, and will definitely need more hashes added to the ignore list.
+	-- May even use weaponDamageEvent, depending on performance..
+	if GetConvarInt('inventory:weaponmismatch', 0) == 0 then return end
+
+	local ignore = {
+		[0] = 1, -- GetSelectedPedWeapon returns 0 when using a firetruk; likely some other cases
+		[966099553] = 1, -- I don't know
+		[`WEAPON_UNARMED`] = 1,
+		[`WEAPON_ANIMAL`] = 1,
+		[`WEAPON_COUGAR`] = 1,
+	}
+
+	while true do
+		Wait(30000)
+
+		for id, inv in pairs(Inventories) do
+			if inv.player then
+				local hash = GetSelectedPedWeapon(inv.player.ped)
+
+				if not ignore[hash] then
+					local currentWeapon = inv.items[inv.weapon]?.name
+
+					if currentWeapon then
+						local currentHash = Items(currentWeapon).hash
+
+						if currentHash ~= hash then
+							inv.weapon = nil
+							print(('Player.%s weapon mismatch (%s). Current weapon: %s (%s)'):format(id, hash, currentWeapon, currentHash))
+						end
+					else
+						print(('Player.%s weapon mismatch (%s)'):format(id, hash, currentWeapon))
+					end
+
+					if not inv.weapon then
+						TriggerClientEvent('ox_inventory:disarm', id)
+					end
+				end
+			end
+		end
+	end
+end)
 
 ---@param item table
 ---@param slot table
@@ -203,7 +248,7 @@ function Inventory.CalculateWeight(items)
 end
 
 ---@param id string|number
----@param label string
+---@param label string|nil
 ---@param invType string
 ---@param slots number
 ---@param weight number
@@ -231,21 +276,31 @@ function Inventory.Create(id, label, invType, slots, weight, maxWeight, owner, i
 			groups = groups,
 		}
 
-		if self.type == 'drop' then
+		if invType == 'drop' then
 			self.datastore = true
 		else
 			self.changed = false
-			self.dbId = self.id
 
-			if self.type ~= 'player' and self.owner and type(self.owner) ~= 'boolean' then
-				self.id = ('%s:%s'):format(self.id, self.owner)
+			if invType ~= 'glovebox' and invType ~= 'trunk' then
+				self.dbId = id
+
+				if invType ~= 'player' and owner and type(owner) ~= 'boolean' then
+					self.id = ('%s:%s'):format(self.id, owner)
+				end
+			else
+				if type(id) == 'number' then
+					self.dbId = id
+					self.id = (invType == 'glovebox' and 'glove' or invType)..label
+				else
+					self.dbId = label
+				end
 			end
 		end
 
-		if not self.items then
-			self.items, self.weight, self.datastore = Inventory.Load(self.dbId, self.type, self.owner)
-		elseif self.weight == 0 and next(self.items) then
-			self.weight = Inventory.CalculateWeight(self.items)
+		if not items then
+			self.items, self.weight, self.datastore = Inventory.Load(self.dbId, invType, owner)
+		elseif weight == 0 and next(items) then
+			self.weight = Inventory.CalculateWeight(items)
 		end
 
 		Inventories[self.id] = self
@@ -263,29 +318,49 @@ function Inventory.Remove(id, type)
 	Inventories[id] = nil
 end
 
-function Inventory.GetPlateFromId(id)
-	if shared.trimplate then
-		return string.strtrim(id:sub(6))
+---Update the internal reference to vehicle stashes. Does not trigger a save or update the database.
+---@param oldPlate string
+---@param newPlate string
+function Inventory.UpdateVehicle(oldPlate, newPlate)
+	local trunk = Inventory('trunk'..oldPlate)
+	local glove = Inventory('glove'..oldPlate)
+
+	if trunk then
+		Inventories[trunk.id] = nil
+		trunk.label = newPlate
+		trunk.dbId = type(trunk.id) == 'number' and trunk.dbId or newPlate
+		trunk.id = 'trunk'..newPlate
+		Inventories[trunk.id] = trunk
 	end
 
-	return id:sub(6)
+	if glove then
+		Inventories[glove.id] = nil
+		glove.label = newPlate
+		glove.dbId = type(glove.id) == 'number' and glove.dbId or newPlate
+		glove.id = 'glove'..newPlate
+		Inventories[glove.id] = glove
+	end
 end
 
 function Inventory.Save(inv)
 	inv = Inventory(inv)
-	local inventory = json.encode(minimal(inv))
 
-	if inv.type == 'player' then
-		db.savePlayer(inv.owner, inventory)
-	else
-		if inv.type == 'trunk' then
-			db.saveTrunk(Inventory.GetPlateFromId(inv.id), inventory)
-		elseif inv.type == 'glovebox' then
-			db.saveGlovebox(Inventory.GetPlateFromId(inv.id), inventory)
+	if inv then
+		local items = json.encode(minimal(inv))
+
+		if inv.type == 'player' then
+			db.savePlayer(inv.owner, items)
 		else
-			db.saveStash(inv.owner, inv.dbId, inventory)
+			if inv.type == 'trunk' then
+				db.saveTrunk(inv.dbId, items)
+			elseif inv.type == 'glovebox' then
+				db.saveGlovebox(inv.dbId, items)
+			else
+				db.saveStash(inv.owner, inv.dbId, items)
+			end
+
+			inv.changed = false
 		end
-		inv.changed = false
 	end
 end
 
@@ -359,7 +434,7 @@ function Inventory.Load(id, invType, owner)
 				datastore = true
 			end
 		elseif invType == 'trunk' or invType == 'glovebox' then
-			result = invType == 'trunk' and db.loadTrunk( Inventory.GetPlateFromId(id) ) or db.loadGlovebox( Inventory.GetPlateFromId(id) )
+			result = invType == 'trunk' and db.loadTrunk(id) or db.loadGlovebox(id)
 
 			if not result then
 				if server.randomloot then
@@ -913,6 +988,10 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 			if not fromInventory then
 				Wait(0)
 				fromInventory = (data.fromType == 'player' and playerInventory) or Inventory(playerInventory.open)
+
+				if not fromInventory then
+					return shared.warning('Unknown error occured during swapItems\n', json.encode(data, {indent = true}))
+				end
 			end
 
 			local sameInventory = fromInventory.id == toInventory.id
@@ -1253,9 +1332,9 @@ local function prepareSave(inv)
 	inv.changed = false
 
 	if inv.type == 'trunk' then
-		return 1, { json.encode(minimal(inv)), Inventory.GetPlateFromId(inv.id) }
+		return 1, { json.encode(minimal(inv)), inv.dbId }
 	elseif inv.type == 'glovebox' then
-		return 2, { json.encode(minimal(inv)), Inventory.GetPlateFromId(inv.id) }
+		return 2, { json.encode(minimal(inv)), inv.dbId }
 	else
 		return 3, { inv.owner or '', inv.dbId, json.encode(minimal(inv)) }
 	end
@@ -1355,6 +1434,12 @@ end)
 
 RegisterServerEvent('ox_inventory:updateWeapon', function(action, value, slot)
 	local inventory = Inventories[source]
+
+	if not action then
+		inventory.weapon = nil
+		return
+	end
+
 	local syncInventory = false
 	local type = type(value)
 

@@ -3,8 +3,8 @@ if not lib then return end
 local Utils = client.utils
 local currentWeapon
 
-RegisterNetEvent('ox_inventory:disarm', function(newSlot)
-	currentWeapon = Utils.Disarm(currentWeapon, newSlot)
+RegisterNetEvent('ox_inventory:disarm', function()
+	currentWeapon = Utils.Disarm(currentWeapon)
 end)
 
 RegisterNetEvent('ox_inventory:clearWeapons', function()
@@ -58,7 +58,7 @@ end
 
 ---@param inv string inventory type
 ---@param data table id and owner
----@return boolean
+---@return boolean?
 function client.openInventory(inv, data)
 	if invOpen then
 		if not inv and currentInventory.type == 'newdrop' then
@@ -493,7 +493,7 @@ local function registerCommands()
 						if (checkVehicle == 0 or checkVehicle == 2) or (not Vehicles.glovebox[vehicleClass] and not Vehicles.glovebox.models[vehicleHash]) then return end
 
 						local plate = client.trimplate and string.strtrim(GetVehicleNumberPlateText(vehicle)) or GetVehicleNumberPlateText(vehicle)
-						client.openInventory('glovebox', {id = 'glove'..plate, class = vehicleClass, model = vehicleHash })
+						client.openInventory('glovebox', {id = 'glove'..plate, class = vehicleClass, model = vehicleHash, netid = NetworkGetNetworkIdFromEntity(vehicle) })
 
 						while true do
 							Wait(100)
@@ -561,7 +561,7 @@ local function registerCommands()
 								local plate = client.trimplate and string.strtrim(GetVehicleNumberPlateText(vehicle)) or GetVehicleNumberPlateText(vehicle)
 								TaskTurnPedToFaceCoord(cache.ped, position.x, position.y, position.z)
 								lastVehicle = vehicle
-								client.openInventory('trunk', {id='trunk'..plate, class = vehicleClass, model = vehicleHash})
+								client.openInventory('trunk', {id='trunk'..plate, class = vehicleClass, model = vehicleHash, netid = NetworkGetNetworkIdFromEntity(vehicle)})
 								local timeout = 20
 								repeat Wait(50)
 									timeout -= 1
@@ -825,24 +825,21 @@ lib.onCache('ped', function()
 end)
 
 lib.onCache('seat', function(seat)
-	SetTimeout(0, function()
-		if seat then
-			if DoesVehicleHaveWeapons(cache.vehicle) then
-				Utils.WeaponWheel(true)
+	if seat then
+		Utils.WeaponWheel(true)
 
-				-- todo: all weaponised vehicle data
-				if cache.seat == -1 then
-					if GetEntityModel(cache.vehicle) == `firetruk` then
-						SetCurrentPedVehicleWeapon(cache.ped, 1422046295)
+		SetTimeout(0, function()
+			if DoesVehicleHaveWeapons(cache.vehicle) then
+				local vehicleModel = GetEntityModel(cache.vehicle)
+
+				if seat == -1 then
+					if vehicleModel == `firetruk` then
+						SetCurrentPedVehicleWeapon(cache.ped, `VEHICLE_WEAPON_WATER_CANNON`)
 					end
 				end
-
-				return
-			end
-		end
-
-		Utils.WeaponWheel(false)
-	end)
+			else Utils.WeaponWheel(false) end
+		end)
+	else Utils.WeaponWheel(false) end
 end)
 
 RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inventory, weight, esxItem, player, source)
@@ -1002,8 +999,12 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				end
 			end
 		end
-		if currentWeapon then print(currentWeapon.hash) end
-		if currentWeapon and GetSelectedPedWeapon(playerPed) ~= currentWeapon.hash then currentWeapon = Utils.Disarm(currentWeapon) end
+
+		if currentWeapon and GetSelectedPedWeapon(playerPed) ~= currentWeapon.hash then
+			TriggerServerEvent('ox_inventory:updateWeapon')
+			currentWeapon = Utils.Disarm(currentWeapon)
+		end
+
 		if client.parachute and GetPedParachuteState(playerPed) ~= -1 then
 			Utils.DeleteObject(client.parachute)
 			client.parachute = false
