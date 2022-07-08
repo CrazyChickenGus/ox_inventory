@@ -73,4 +73,39 @@ if shared.framework == 'esx' then
 			exports.ox_inventory:setPlayerInventory(player, player?.inventory)
 		end
 	end)
+
+elseif shared.framework == 'qbcore' then
+	local QBCore = exports['qb-core']:GetCoreObject()
+	server.UseItem = QBCore.Functions.UseItem
+	server.UsableItemsCallbacks = QBCore.UseableItems
+	server.GetPlayerFromId = QBCore.Functions.GetPlayer
+
+	-- Accounts that need to be synced with physical items
+	server.accounts = {
+		money = 0,
+		black_money = 0,
+	}
+
+	function server.setPlayerData(player)
+		
+		local groups = {
+			[player.PlayerData.job.name] = player.PlayerData.job.grade.level
+		}
+
+		return {
+			source = player.PlayerData.source,
+			name = player.PlayerData.charinfo.firstname.." "..player.PlayerData.charinfo.lastname,
+			groups = groups,
+			sex = not player.PlayerData.charinfo.gender,
+			dateofbirth = player.PlayerData.charinfo.birthdate,
+		}
+	end
+
+	RegisterServerEvent('ox_inventory:requestPlayerInventory', function()
+		local source = source
+		local player = server.GetPlayerFromId(source)
+		if player then
+			exports.ox_inventory:setPlayerInventory(player, player?.inventory)
+		end
+	end)
 end

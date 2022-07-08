@@ -44,7 +44,7 @@ Item('bandage', function(data, slot)
 	end)
 end)
 
-Item('armour', function(data, slot)
+Item('armor', function(data, slot)
 	if GetPedArmour(cache.ped) < 100 then
 		ox_inventory:useItem(data, function(data)
 			if data then

@@ -58,6 +58,44 @@ setmetatable(Items, {
 
 local Inventory
 
+local function dumpItems(dump)
+	local count = 0
+	local file = {string.strtrim(LoadResourceFile(shared.resource, 'data/items.lua'))}
+	file[1] = file[1]:gsub('}$', '')
+	
+	local itemFormat = [[
+		['%s'] = {
+			label = '%s',
+			weight = %s,
+			stack = %s,
+			close = %s,
+			description = %s
+		},
+	]]
+	
+	local fileSize = #file
+	for _, item in pairs(dump) do
+		local formatName = item.name:gsub("'", "\\'"):lower()
+		
+		if not ItemList[formatName] then
+			fileSize += 1
+			file[fileSize] = (itemFormat):format(formatName, item.label:gsub("'", "\\'"):lower(), item.weight, item.stack, item.close, item.description and ('"%s"'):format(item.description) or 'nil')
+			ItemList[formatName] = item
+			count = count + 1
+		end
+	end
+
+	local temp = 0
+	for k, v in pairs(ItemList) do
+		temp = temp + 1
+	end
+
+	file[fileSize+1] = '}'
+	SaveResourceFile(shared.resource, 'data/items.lua', table.concat(file), -1)
+	shared.info(shared.resource)
+	shared.info(count, 'items have been copied from the database')
+end
+
 CreateThread(function()
 	Inventory = server.inventory
 
@@ -82,35 +120,7 @@ CreateThread(function()
 			end
 
 			if next(dump) then
-				local file = {string.strtrim(LoadResourceFile(shared.resource, 'data/items.lua'))}
-				file[1] = file[1]:gsub('}$', '')
-
-				local itemFormat = [[
-
-	['%s'] = {
-		label = '%s',
-		weight = %s,
-		stack = %s,
-		close = %s,
-		description = %s
-	},
-]]
-				local fileSize = #file
-
-				for _, item in pairs(items) do
-					local formatName = item.name:gsub("'", "\\'"):lower()
-					if not ItemList[formatName] then
-						fileSize += 1
-
-						file[fileSize] = (itemFormat):format(formatName, item.label:gsub("'", "\\'"):lower(), item.weight, item.stack, item.close, item.description and ('"%s"'):format(item.description) or 'nil')
-						ItemList[formatName] = v
-					end
-				end
-
-				file[fileSize+1] = '}'
-
-				SaveResourceFile(shared.resource, 'data/items.lua', table.concat(file), -1)
-				shared.info(count, 'items have been copied from the database')
+				dumpItems(dump)
 			end
 
 			shared.warning('Database contains', #items, 'items.')
@@ -119,6 +129,31 @@ CreateThread(function()
 			shared.warning('Note: Any items that exist in item data and not the database will not work in said resources.')
 			shared.warning('Apparently indexing ESX.Items is too big brain, or something.')
 		end
+	elseif shared.framework == 'qbcore' then
+		local QBCore = exports['qb-core']:GetCoreObject()
+		local items = QBCore.Shared.Items
+
+		if items then
+			local dump = {}
+			local count = 1
+
+			for k, v in pairs(items) do
+				local item = v
+				if not ItemList[item.name] then
+					item.close = item.shouldClose or true
+					item.stack = not item.unique or true
+					item.description = item.description
+					item.metadata = {}
+					item.metadata.image = item.image
+					item.weight = item.weight or 0
+					dump[count] = item
+					count += 1
+				end
+			end
+			if next(dump) then
+				dumpItems(dump)
+			end
+		end
 	end
 
 	if server.clearstashes then MySQL.query('DELETE FROM ox_inventory WHERE lastupdated < (NOW() - INTERVAL '..server.clearstashes..') OR data = "[]"') end
@@ -126,7 +161,7 @@ CreateThread(function()
 	local count = 0
 	Wait(2000)
 	if server.UsableItemsCallbacks then
-		server.UsableItemsCallbacks = server.UsableItemsCallbacks()
+		server.UsableItemsCallbacks = server.UsableItemsCallbacks
 	else server.UsableItemsCallbacks = {} end
 
 	for _, item in pairs(ItemList) do

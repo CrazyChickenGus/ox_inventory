@@ -13,9 +13,12 @@ local function setPlayerInventory(player, data)
 	while not shared.ready do Wait(0) end
 
 	if not data then
-		data = db.loadPlayer(player.identifier)
+		if shared.framework == 'qbcore' then
+			data = db.loadPlayer(player.PlayerData.citizenid)
+		else
+			data = db.loadPlayer(player.identifier)
+		end
 	end
-
 	local inventory = {}
 	local totalWeight = 0
 
@@ -31,7 +34,6 @@ local function setPlayerInventory(player, data)
 				if v.metadata then
 					v.metadata = Items.CheckMetadata(v.metadata, item, v.name)
 				end
-
 				local weight = Inventory.SlotWeight(item, v)
 				totalWeight = totalWeight + weight
 
@@ -41,11 +43,22 @@ local function setPlayerInventory(player, data)
 	end
 
 	player.source = tonumber(player.source)
-	local inv = Inventory.Create(player.source, player.name, 'player', shared.playerslots, totalWeight, shared.playerweight, player.identifier, inventory)
+	local inv = {}
+	if shared.framework == 'qbcore' then
+		inv = Inventory.Create(player.PlayerData.source, player.PlayerData.name, 'player', shared.playerslots, totalWeight, shared.playerweight, player.identifier, inventory)
+	else
+		inv = Inventory.Create(player.source, player.name, 'player', shared.playerslots, totalWeight, shared.playerweight, player.identifier, inventory)
+	end
+	
 	inv.player = server.setPlayerData(player)
-
-	if shared.framework == 'esx' then Inventory.SyncInventory(inv) end
-	TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight, server.UsableItemsCallbacks, inv.player, player.source)
+	
+	if shared.framework == 'esx' then 
+		Inventory.SyncInventory(inv)
+		TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight, server.UsableItemsCallbacks, inv.player, player.source)
+	elseif shared.framework == 'qbcore' then
+		player.Functions.SetInventory(inventory)
+		TriggerClientEvent('ox_inventory:setPlayerInventory', player.PlayerData.source, Inventory.Drops, inventory, totalWeight, server.UsableItemsCallbacks, inv.player, player.PlayerData.source)
+	end
 end
 exports('setPlayerInventory', setPlayerInventory)
 AddEventHandler('ox_inventory:setPlayerInventory', setPlayerInventory)
@@ -219,7 +232,11 @@ lib.callback.register('ox_inventory:useItem', function(source, item, slot, metad
 				data.component = true
 				return data
 			elseif server.UsableItemsCallbacks[item.name] then
-				server.UseItem(source, data.name, data)
+				if shared.framework == 'qbcore' then
+					server.UseItem(source, data)
+				else
+					server.UseItem(source, data.name, data)
+				end
 			else
 				if item.consume and data.count >= item.consume then
 					local result = item.cb and item.cb('usingItem', item, inventory, slot)

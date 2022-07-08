@@ -1,16 +1,35 @@
 local Query = {
-	SELECT_STASH = 'SELECT data FROM ox_inventory WHERE owner = ? AND name = ?',
-	UPDATE_STASH = 'INSERT INTO ox_inventory (owner, name, data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)',
-	SELECT_GLOVEBOX = 'SELECT plate, glovebox FROM `{vehicle_column}` WHERE plate = ?',
-	SELECT_TRUNK = 'SELECT plate, trunk FROM `{vehicle_column}` WHERE plate = ?',
-	SELECT_PLAYER = 'SELECT inventory FROM `{user_column}` WHERE charid = ?',
-	UPDATE_TRUNK = 'UPDATE `{vehicle_column}` SET trunk = ? WHERE plate = ?',
-	UPDATE_GLOVEBOX = 'UPDATE `{vehicle_column}` SET glovebox = ? WHERE plate = ?',
-	UPDATE_PLAYER = 'UPDATE `{user_column}` SET inventory = ? WHERE charid = ?',
+
 }
 
 do
-	local playerColumn, vehicleColumn
+	local playerColumn, vehicleColumn, trunkTable, gloveboxTable
+
+	if shared.framework == 'qbcore' then
+		Query = {
+			SELECT_STASH = 'SELECT data FROM ox_inventory WHERE owner = ? AND name = ?',
+			UPDATE_STASH = 'INSERT INTO ox_inventory (owner, name, data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)',
+			SELECT_TRUNK = 'SELECT plate, items from `{trunk_table}` WHERE plate = ?',
+			SELECT_GLOVEBOX = 'SELECT plate, items from `{glovebox_table}` WHERE plate = ?',
+			SELECT_PLAYER = 'SELECT inventory from `{user_column}` WHERE citizenid = ?',
+			UPDATE_TRUNK = 'UPDATE `{trunk_table}` SET items = ? WHERE plate = ?',
+			UPDATE_GLOVEBOX = 'UPDATE `{glovebox_table}` SET items = ? WHERE plate = ?',
+			UPDATE_PLAYER = 'UPDATE `{user_column}` SET inventory = ? WHERE citizenid = ?'
+		}
+	else
+		Query = {
+			SELECT_STASH = 'SELECT data FROM ox_inventory WHERE owner = ? AND name = ?',
+			UPDATE_STASH = 'INSERT INTO ox_inventory (owner, name, data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)',
+			SELECT_GLOVEBOX = 'SELECT plate, glovebox FROM `{vehicle_column}` WHERE plate = ?',
+			SELECT_TRUNK = 'SELECT plate, trunk FROM `{vehicle_column}` WHERE plate = ?',
+			SELECT_PLAYER = 'SELECT inventory FROM `{user_column}` WHERE charid = ?',
+			UPDATE_TRUNK = 'UPDATE `{vehicle_column}` SET trunk = ? WHERE plate = ?',
+			UPDATE_GLOVEBOX = 'UPDATE `{vehicle_column}` SET glovebox = ? WHERE plate = ?',
+			UPDATE_PLAYER = 'UPDATE `{user_column}` SET inventory = ? WHERE charid = ?',
+		}
+	end
+
+	
 
 	if shared.framework == 'ox' then
 		playerColumn = 'characters'
@@ -18,10 +37,20 @@ do
 	elseif shared.framework == 'esx' then
 		playerColumn = 'users'
 		vehicleColumn = 'owned_vehicles'
+	elseif shared.framework == 'qbcore' then
+		playerColumn = 'players'
+		trunkTable = 'trunkitems'
+		gloveboxTable = 'gloveboxitems'
 	end
 
-	for k, v in pairs(Query) do
-		Query[k] = v:gsub('{user_column}', playerColumn):gsub('{vehicle_column}', vehicleColumn)
+	if shared.framework == 'qbcore' then
+		for k, v in pairs(Query) do
+			Query[k] = v:gsub('{user_column}', playerColumn):gsub('{trunk_table}', trunkTable):gsub('{glovebox_table}', gloveboxTable)
+		end
+	else
+		for k, v in pairs(Query) do
+			Query[k] = v:gsub('{user_column}', playerColumn):gsub('{vehicle_column}', vehicleColumn)
+		end
 	end
 end
 
@@ -29,7 +58,25 @@ db = {}
 
 function db.loadPlayer(identifier)
 	local inventory = MySQL.prepare.await(Query.SELECT_PLAYER, { identifier })
-	return inventory and json.decode(inventory)
+	local decodedInventory = json.decode(inventory)
+
+	local newInv = {}
+	for _, item in pairs(decodedInventory) do
+		local tempItem = {
+			name = item.name,
+			slot = item.slot,
+			count = item.count
+		}
+		if item.type == 'weapon' and item.info then
+			tempItem['metadata'] = {
+				serial = item.info.serie,
+				durability = item.info.quality,
+				components = item.info.attachments
+			}
+		end
+		table.insert(newInv, tempItem)
+	end
+	return decodedInventory
 end
 
 function db.savePlayer(owner, inventory)

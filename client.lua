@@ -77,7 +77,6 @@ function client.openInventory(inv, data)
 	if inv == 'dumpster' and cache.vehicle then
 		return lib.notify({ type = 'error', description = shared.locale('inventory_right_access') })
 	end
-
 	if canOpenInventory() then
 		local left, right
 
@@ -102,7 +101,6 @@ function client.openInventory(inv, data)
 
 			left, right = lib.callback.await('ox_inventory:openInventory', false, inv, data)
 		end
-
 		if left then
 			if inv ~= 'trunk' and not cache.vehicle then
 				Utils.PlayAnim(1000, 'pickup_object', 'putdown_low', 5.0, 1.5, -1, 48, 0.0, 0, 0, 0)
@@ -146,6 +144,7 @@ local Animations = data 'animations'
 ---@param data table
 ---@param cb function
 local function useItem(data, cb)
+	print("USEITEMFUNCTION")
 	if invOpen and data.close then TriggerEvent('ox_inventory:closeInventory') end
 	if not invBusy and not PlayerData.dead and not lib.progressActive() and not IsPedRagdoll(cache.ped) and not IsPedFalling(cache.ped) then
 		if currentWeapon and currentWeapon?.timer > 100 then return end
@@ -229,6 +228,10 @@ local Items = client.items
 local function useSlot(slot)
 	if PlayerData.loaded and not PlayerData.dead and not invBusy and not lib.progressActive() then
 		local item = PlayerData.inventory[slot]
+		print("USER SLOT")
+		print(item)
+		print(item.name)
+		print(Items[item.name])
 		if not item then return end
 		local data = item and Items[item.name]
 		if not data or not data.usable then return end
@@ -698,7 +701,6 @@ local function updateInventory(items, weight)
 
 	for item, count in pairs(itemCount) do
 		local data = Items[item]
-
 		if count < 0 then
 			data.count += count
 
@@ -867,7 +869,6 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			return exports.npwd:setPhoneDisabled(true)
 		end)
 	end
-
 	client.setPlayerData('inventory', inventory)
 	client.setPlayerData('weight', weight)
 	currentWeapon = nil
@@ -930,9 +931,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			}
 		}
 	})
-
 	PlayerData.loaded = true
-
+	client.setPlayerData("loaded", true)
 	Shops()
 	Inventory.Stashes()
 	Inventory.Evidence()
@@ -1002,7 +1002,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				end
 			end
 		end
-
+		if currentWeapon then print(currentWeapon.hash) end
 		if currentWeapon and GetSelectedPedWeapon(playerPed) ~= currentWeapon.hash then currentWeapon = Utils.Disarm(currentWeapon) end
 		if client.parachute and GetPedParachuteState(playerPed) ~= -1 then
 			Utils.DeleteObject(client.parachute)
@@ -1101,7 +1101,6 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			end
 		end
 	end, 0, lib.disableControls)
-
 	plyState:set('invBusy', false, false)
 	plyState:set('invOpen', false, false)
 	collectgarbage('collect')
@@ -1189,7 +1188,6 @@ RegisterNUICallback('giveItem', function(data, cb)
 			target = GetPlayerServerId(NetworkGetPlayerIndexFromPed(target))
 			Utils.PlayAnim(2000, 'mp_common', 'givetake1_a', 1.0, 1.0, -1, 50, 0.0, 0, 0, 0)
 			TriggerServerEvent('ox_inventory:giveItem', data.slot, target, data.count)
-
 			if data.slot == currentWeapon?.slot then
 				currentWeapon = Utils.Disarm(currentWeapon)
 			end

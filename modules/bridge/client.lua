@@ -35,6 +35,9 @@ local function onLogout()
 		ClearInterval(client.interval)
 		ClearInterval(client.tick)
 		currentWeapon = Utils.Disarm(currentWeapon)
+		if shared.framework == 'qbcore' then
+			TriggerServerEvent('ox:Server:OnPlayerUnload', PlayerPedId())
+		end
 	end
 end
 
@@ -89,4 +92,61 @@ elseif shared.framework == 'esx' then
 	if ESX.PlayerLoaded then
 		TriggerServerEvent('ox_inventory:requestPlayerInventory')
 	end
+elseif shared.framework == 'qbcore' then
+	local qbcore = exports['qb-core']:GetCoreObject()
+
+	function client.setPlayerData(key, value)
+		PlayerData[key] = value
+		OnPlayerData(key, value)
+		if(key == "inventory") then
+			local newInv = {}
+			for _, item in pairs(value) do
+				local tempItem = {
+					name = item.name,
+					slot = item.slot,
+					count = item.count,
+					metadata = item.metadata or {}
+				}
+				if item.type == 'weapon' and item.info then
+					tempItem['metadata'] = {
+						serial = item.info.serie,
+						durability = item.info.quality,
+						components = item.info.attachments
+					}
+				end
+				table.insert(newInv, tempItem)
+			end
+			
+			local plyr = qbcore.Functions.GetPlayerData(false)
+			plyr.items = newInv
+			TriggerEvent('QBCore:Player:SetPlayerData', plyr)
+		end
+	end
+
+	RegisterNetEvent('QBCore:Client:OnPlayerUnload', onLogout)
+	
+	RegisterNetEvent('QBCore:Client:OnJobUpdate', function(key, value)
+		local oxKey = 'groups'
+		local oxValue = { [value.name] = value.grade }
+		PlayerData[oxKey] = oxValue
+		OnPlayerData(oxKey, oxValue)
+	end)
+
+	RegisterNetEvent('police:client:GetCuffed', function(playerId, isSoftcuff)
+		if exports["qb-policejob"]:IsHandcuffed() then
+			PlayerData.cuffed = false
+			LocalPlayer.state:set('invBusy', PlayerData.cuffed, false)
+		else
+			PlayerData.cuffed = not PlayerData.cuffed
+			LocalPlayer.state:set('invBusy', PlayerData.cuffed, false)
+			if PlayerData.cuffed then
+				currentWeapon = Utils.Disarm(currentWeapon)
+			end
+		end
+	end)
+
+	RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+		TriggerServerEvent('ox_inventory:requestPlayerInventory')
+	end)
+
 end

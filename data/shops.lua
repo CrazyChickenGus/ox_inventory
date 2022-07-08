@@ -141,6 +141,31 @@ return {
 		}
 	},
 
+	URL = {
+		name = 'URL Employee Shop',
+		groups = {
+			['mechanic'] = 0
+		},
+		blip = {
+			id = 403, colour = 69, scale = 0.8
+		},
+		inventory = {
+			{ name = 'repairkit', price = 1000 },
+			{ name = 'advancedrepairkit', price = 1750 },
+			{ name = 'nitrous', price = 4000 },
+			{ name = 'harness', price = 2500 },
+			{ name = 'cleaningkit', price = 750 },
+			{ name = 'pixellaptop', price = 25000 },
+			{ name = 'disabler', price = 2500 },
+		},
+		locations = {
+			vec3(-328.8, -162.50, 39.02)
+		},
+		targets = {
+			{ loc = vec3(-328.8, -162.50, 39.02), length = 0.5, width = 3.0, heading = 72.0, minZ = 38.02, maxZ = 40.02, distance = 3.5 }
+		}
+	},
+
 	BlackMarketArms = {
 		name = 'Black Market (Arms)',
 		inventory = {
