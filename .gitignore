@@ -2,3 +2,6 @@ modules/logs/**/
 .cfg
 web/
 data/
+data/shops.lua
+data/stashes.lua
+data/weapons.lua
