@@ -1,3 +1,4 @@
 modules/logs/**/
 .cfg
-web/**
+web/
+data/

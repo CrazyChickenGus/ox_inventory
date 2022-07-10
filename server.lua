@@ -51,7 +51,7 @@ local function setPlayerInventory(player, data)
 	end
 	
 	inv.player = server.setPlayerData(player)
-	inv.player.ped = GetPlayerPed(player.source)
+	-- inv.player.ped = GetPlayerPed(player.source)
 	
 	if shared.framework == 'esx' then 
 		Inventory.SyncInventory(inv)

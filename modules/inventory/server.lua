@@ -1180,7 +1180,7 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 					if next(items) then
 						resp = { weight = playerInventory.weight, items = items }
 
-						if shared.framework == 'esx' then
+						if shared.framework == 'esx' or shared.framework == 'qbcore' then
 							if fromInventory.player then
 								Inventory.SyncInventory(fromInventory)
 							end
@@ -1533,7 +1533,7 @@ lib.addCommand('qbcore.admin', {'additem', 'giveitem'}, function(source, args)
 	end
 end, {'target:number', 'item:string', 'count:number', 'metatype:?string'})
 
-lib.addCommand('group.admin', 'removeitem', function(source, args)
+lib.addCommand('qbcore.admin', 'removeitem', function(source, args)
 	args.item = Items(args.item)
 	if args.item and args.count > 0 then
 		Inventory.RemoveItem(args.target, args.item.name, args.count, args.metaType)
@@ -1591,11 +1591,11 @@ lib.addCommand('group.admin', 'clearinv', function(source, args)
 	Inventory.Clear(args.target)
 end, {'target:number'})
 
-lib.addCommand('group.admin', 'saveinv', function(source, args)
+lib.addCommand('qbcore.admin', 'saveinv', function(source, args)
 	saveInventories(args[1] == 1 or args[1] == 'true')
 end)
 
-lib.addCommand('group.admin', 'viewinv', function(source, args)
+lib.addCommand('qbcore.admin', 'viewinv', function(source, args)
 	local inventory = Inventories[args.target] or Inventories[tonumber(args.target)]
 	TriggerClientEvent('ox_inventory:viewInventory', source, inventory)
 end, {'target'})
